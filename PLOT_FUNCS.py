@@ -38,6 +38,15 @@ def CreatePSDPlot(**params):
     fig, axs = plt.subplots(**params)
     return fig, axs
 
+def CreatePlot(**params):
+    ''' Create a plot for PSD data.'''
+    fig, axs = plt.subplots(**params)
+    return fig, axs
+
+def CreatePlotRowCol(numRow, numCol, **params):
+    fig, axs = plt.subplots(numRow, numCol, **params)
+    return fig, axs
+
 def on_legend_click(event, axs, fig):
     legend_text = event.artist
     label = legend_text.get_text()
@@ -50,6 +59,27 @@ def connect_legend(legend, axs, fig):
     for legend_text in legend.get_texts():
         legend_text.set_picker(True)
     fig.canvas.mpl_connect('pick_event', lambda event: on_legend_click(event, axs, fig))
+
+def formatMDEVPlot(fig, axs, title = 'Modified Allan Deviation', xlabel = 'Tau (s)', ylabel = 'MDEV (m)'):
+    ''' Format a MDEV plot.'''
+    axs.set_title(title)
+    axs.set_xlabel(xlabel)
+    axs.set_ylabel(ylabel)
+    axs.set_xscale('log')
+    axs.set_yscale('log')
+    legend = axs.legend(loc = 'upper right')
+    axs.grid(which = 'both')
+    axs.minorticks_on()
+    cursor = mplcursors.cursor(axs, hover=True)
+    def on_add(sel):
+        x, y = sel.target
+        sel.annotation.set(text=f'({x:.2f}, {y:.2f})')
+        sel.annotation.get_bbox_patch().set(fc="white", alpha=0.8)
+    cursor.connect("add", on_add)
+    connect_legend(legend, axs, fig)
+    
+    
+    return fig, axs
 
 def formatPSDPlotdBm(fig, axs, title = 'Power Spectral Density', density = True, linear = True, xlabel = None, PSD_View = False, RBW = None ):
     ''' Format a PSD plot with data in dBm or dBm/Hz.'''

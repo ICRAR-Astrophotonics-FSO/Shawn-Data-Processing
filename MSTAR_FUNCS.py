@@ -21,55 +21,6 @@ def print_attrs(name, obj):
     for key, val in obj.attrs.items():
         print(f"    Attribute: {key} = {val}")
 
-def calc_tdev(dt, input_data, taus = np.logspace(-2, 3, 15, endpoint=True), data_type="phase", laser_freq=1):
-    # check if dt is a scalar, if so samp_freq=1/dt. If array, then it is time array. fs = 1/np.average(np.diff(dt))
-    if np.isscalar(dt):
-        samp_freq=1/dt
-    else:
-        dt=np.array(dt)
-        samp_freq=1/np.average(np.diff(dt))
-    if data_type=="phase":
-        phase=[p/laser_freq for p in input_data]  #convert phase into seconds
-    elif data_type=="freq":
-        data=input_data-np.mean(input_data) # convert phase into seconds
-        phase = np.cumsum(data) / samp_freq /laser_freq# convert frequency into seconds
- 
-    # The md_errors from allantools seem to be wrong. This fixes that problem.
-    (md_taus, tdev, errors, ns)=allan.tdev(phase,rate=samp_freq,data_type="phase",taus=taus)
-    return md_taus, tdev, errors
-
-def calc_mdev(dt, input_data, taus = np.logspace(-2, 3, 15, endpoint=True), data_type="phase", laser_freq=1):
-    # check if dt is a scalar, if so samp_freq=1/dt. If array, then it is time array. fs = 1/np.average(np.diff(dt))
-    if np.isscalar(dt):
-        samp_freq=1/dt
-    else:
-        dt=np.array(dt)
-        samp_freq=1/np.average(np.diff(dt))
-    if data_type=="phase":
-        phase=[p/laser_freq for p in input_data]  #convert phase into seconds
-    elif data_type=="freq":
-        data=input_data-np.mean(input_data) # convert phase into seconds
-        phase = np.cumsum(data) / samp_freq /laser_freq# convert frequency into seconds
- 
-    # The md_errors from allantools seem to be wrong. This fixes that problem.
-    (md_taus, mdev, errors, ns)=allan.mdev(phase,rate=samp_freq,data_type="phase",taus=taus)
-    (ad_taus, adev, ad_errors, ad_ns)=allan.adev(phase,rate=samp_freq,data_type="phase",taus=taus)
-    md_errors=[d/np.sqrt(n) for [d,n] in zip(mdev, ad_ns)]
-    return md_taus, mdev, md_errors
-
-def calc_adev(dt, input_data, taus = np.logspace(-2, 3, 15, endpoint=True), data_type="phase", laser_freq=1):
-    # check if dt is a scalar, if so samp_freq=1/dt. If array, then it is time array. fs = 1/np.average(np.diff(dt))
-    if np.isscalar(dt):
-        samp_freq=1/dt
-    else:
-        dt=np.array(dt)
-        samp_freq=1/np.average(np.diff(dt))
-
-    # The md_errors from allantools seem to be wrong. This fixes that problem.
-    (md_taus, mdev, errors, ns)=allan.mdev(input_data,rate=samp_freq,data_type=data_type,taus=taus)
-    (ad_taus, adev, ad_errors, ad_ns)=allan.adev(input_data,rate=samp_freq,data_type=data_type,taus=taus)
-    md_errors=[d/np.sqrt(n) for [d,n] in zip(mdev, ad_ns)]
-    return ad_taus, adev, ad_errors
 
 def debias_phase(phase, t):
     # Take gradient, remove frequency bias. Integrate from zero

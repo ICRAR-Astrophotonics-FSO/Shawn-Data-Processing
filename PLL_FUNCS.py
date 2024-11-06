@@ -155,6 +155,7 @@ def PLL_TF(A = 1, P = 0.2, I = 0.05, I2 = 0.005, fs = 1):
 
 @jit(nopython=True, cache=True)
 def movingAverageFilter(data, N):
+    print("Deprecated. Using function in MSTAR_STATS.py")
     averageData = np.zeros(len(data) - N + 1)
     stdDeviations = np.zeros(len(data) - N + 1)
     
