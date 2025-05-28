@@ -11,6 +11,21 @@ import mplcursors
 
 ### PSD, most used.
 
+SMALL_SIZE = 14
+MEDIUM_SIZE = 14
+BIGGER_SIZE = 14
+TITLE_PAD = 14
+
+plt.rc('font', size=SMALL_SIZE)  # controls default text sizes
+plt.rc('axes', titlesize=BIGGER_SIZE)  # fontsize of the axes title
+plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the axes title
+plt.rc('axes', labelsize=MEDIUM_SIZE)  # fontsize of the x and y labels
+plt.rc('xtick', labelsize=SMALL_SIZE)  # fontsize of the tick labels
+plt.rc('ytick', labelsize=SMALL_SIZE)  # fontsize of the tick labels
+plt.rc('legend', fontsize=MEDIUM_SIZE)  # legend fontsize
+
+plt.rcParams["font.family"] = "serif"
+
 def read_spec_csv_2Chan(fn):
     data = np.genfromtxt(fn, delimiter=',', skip_header=11)
     freq = data[:,0]
@@ -60,28 +75,65 @@ def connect_legend(legend, axs, fig):
         legend_text.set_picker(True)
     fig.canvas.mpl_connect('pick_event', lambda event: on_legend_click(event, axs, fig))
 
-def formatMDEVPlot(fig, axs, title = 'Modified Allan Deviation', xlabel = 'Tau (s)', ylabel = 'MDEV (m)'):
+def hide_except_labels(legend, labels_to_keep, axs, fig):
+    """
+    Hide all legend entries except for the specified labels.
+    
+    Parameters:
+    legend (matplotlib.legend.Legend): The legend object.
+    labels_to_keep (list or str): The labels to keep visible.
+    axs (matplotlib.axes.Axes): The axes object.
+    fig (matplotlib.figure.Figure): The figure object.
+    """
+    if isinstance(labels_to_keep, str):
+        labels_to_keep = [labels_to_keep]
+    
+    for line in axs.get_lines():
+        if line.get_label() not in labels_to_keep:
+            line.set_visible(False)
+        else:
+            line.set_visible(True)
+    
+    fig.canvas.draw()
+
+def formatMDEVPlot(fig, axs, title = 'Modified Allan Deviation', xlabel = 'Tau (s)', ylabel = 'MDEV (m)', paper = False, laserAmbiguity = False, laserAmbiguityWl = 1.5e-6/4, hideAll = False):
     ''' Format a MDEV plot.'''
-    axs.set_title(title)
+    if not paper:
+        axs.set_title(title)
     axs.set_xlabel(xlabel)
     axs.set_ylabel(ylabel)
     axs.set_xscale('log')
     axs.set_yscale('log')
+    
+    if laserAmbiguity:
+        axs.axhline(y=laserAmbiguityWl, color='r', linestyle='--', label = 'Laser Ambiguity Wavelength $\lambda/4$')
+    
     legend = axs.legend(loc = 'upper right')
     axs.grid(which = 'both')
     axs.minorticks_on()
-    cursor = mplcursors.cursor(axs, hover=True)
-    def on_add(sel):
-        x, y = sel.target
-        sel.annotation.set(text=f'({x:.2f}, {y:.2f})')
-        sel.annotation.get_bbox_patch().set(fc="white", alpha=0.8)
-    cursor.connect("add", on_add)
-    connect_legend(legend, axs, fig)
-    
-    
+    if not paper:
+        cursor = mplcursors.cursor(axs, hover=True)
+        def on_add(sel):
+            x, y = sel.target
+            sel.annotation.set(text=f'({x:.2f}, {y:.2f})')
+            sel.annotation.get_bbox_patch().set(fc="white", alpha=0.8)
+        cursor.connect("add", on_add)
+        connect_legend(legend, axs, fig)
+    else:
+        axs.tick_params(axis='both', which='major', labelsize=12)
+        # get axis label
+        axs.xaxis.get_offset_text().set_fontsize(12) # set axis label font
+        # set axis label font
+    fig.tight_layout()
+    if hideAll:
+        for line in axs.get_lines():
+            line.set_visible(False)
+    else:
+        for line in axs.get_lines():
+            line.set_visible(True)
     return fig, axs
 
-def formatPSDPlotdBm(fig, axs, title = 'Power Spectral Density', density = True, linear = True, xlabel = None, PSD_View = False, RBW = None ):
+def formatPSDPlotdBm(fig, axs, title = 'Power Spectral Density', density = True, linear = True, xlabel = None, PSD_View = False, RBW = None, showLabels = None, legendLoc = 'upper right', hideAll = False ):
     ''' Format a PSD plot with data in dBm or dBm/Hz.'''
     axs.set_title(title)
     if xlabel is not None:
@@ -108,7 +160,7 @@ def formatPSDPlotdBm(fig, axs, title = 'Power Spectral Density', density = True,
             axs2.set_zorder(-100)
 
     
-    legend = axs.legend(loc = 'upper right')
+    legend = axs.legend(loc = legendLoc)
     axs.grid()
     axs.minorticks_on()
 
@@ -127,6 +179,16 @@ def formatPSDPlotdBm(fig, axs, title = 'Power Spectral Density', density = True,
 
     
     connect_legend(legend, axs, fig)
+    if showLabels is not None:
+        hide_except_labels(legend, showLabels, axs, fig)
+    
+    if hideAll:
+        for line in axs.get_lines():
+            line.set_visible(False)
+    else:
+        for line in axs.get_lines():
+            line.set_visible(True)
+
     return fig, axs
 
 def formatPlot(fig, axs, title = 'Plot', xlabel = 'X', ylabel = 'Y'):
@@ -139,7 +201,7 @@ def formatPlot(fig, axs, title = 'Plot', xlabel = 'X', ylabel = 'Y'):
     connect_legend(legend, axs, fig)
     return fig, axs
 
-def formatPSDPlot(fig, axs, title = 'Power Spectral Density', unit = 'cyc', phase = True, dB = False, density = True, linear = True):
+def formatPSDPlot(fig, axs, title = 'Power Spectral Density', unit = 'cyc', phase = True, dB = False, density = True, linear = True, hideAll = False):
     ''' Format a PSD plot. If phase, cyc or rad^2/Hz and dB is used. If not, A^2/Hz or V^2/Hz and dBm is used for 50 ohm.'''
     axs.set_title(title)
     axs.set_xlabel('Frequency (Hz)')
@@ -165,6 +227,15 @@ def formatPSDPlot(fig, axs, title = 'Power Spectral Density', unit = 'cyc', phas
     axs.grid()
     axs.minorticks_on()
     connect_legend(legend, axs, fig)
+
+    if hideAll:
+        for line in axs.get_lines():
+            line.set_visible(False)
+    else:
+        for line in axs.get_lines():
+            line.set_visible(True)
+
+
     return fig, axs
 
 

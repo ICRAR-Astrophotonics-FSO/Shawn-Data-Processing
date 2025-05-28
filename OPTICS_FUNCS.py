@@ -133,7 +133,7 @@ if __name__ == '__main__':
 
     # volts_dBm =  # dBm
     # Vpp, Vrms, Vpeak = dBm2Volts(volts_dBm)
-    Vpeak = np.linspace(-10, 10, 100)
+    Vpeak = np.linspace(0, 10, 100)
     # Vpp, Vrms, Vpeak = dBm2Volts(Vpeak)
     line0_pow, line0_gain = EOM_LINE_POWER(0, Vpi, Vpeak)
     line1_pow, line1_gain = EOM_LINE_POWER(1, Vpi, Vpeak)
@@ -141,16 +141,20 @@ if __name__ == '__main__':
     line3_pow, line3_gain = EOM_LINE_POWER(2, Vpi, Vpeak)
     line4_pow, line4_gain = EOM_LINE_POWER(-2, Vpi, Vpeak)
 
+    line12_pow, line12_gain = EOM_LINE_POWER(3, Vpi, Vpeak)
+
     plt.figure()
-    plt.plot(Vpeak, line0_pow, label = 'N = 0')
-    plt.plot(Vpeak, line1_pow, label = 'N = 1')
-    plt.plot(Vpeak, line2_pow, label = 'N = -1')
-    plt.plot(Vpeak, line3_pow, label = 'N = 2')
-    plt.plot(Vpeak, line4_pow, label = 'N = -2')
+    plt.plot(Vpeak, 10*np.log10(line0_pow), label = 'N = 0')
+    plt.plot(Vpeak, 10*np.log10(line1_pow), label = 'N = 1')
+    # plt.plot(Vpeak, line2_pow, label = 'N = -1')
+    plt.plot(Vpeak, 10*np.log10(line3_pow), label = 'N = 2')
+    plt.plot(Vpeak, 10*np.log10(line12_pow), label = 'N = 3')
+    # plt.plot(Vpeak, line4_pow, label = 'N = -2')
     plt.ylabel('Bessel Power')
     plt.xlabel('Vpeak')
     plt.grid()  
     plt.legend()
+
 
     V0 = 1.5
     Vpi = 4.4

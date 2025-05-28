@@ -31,17 +31,61 @@ def debias_phase(phase, t):
     print(f"Removed gradient: {p[0]}")
     return phase
 
-def openSweepFile(file_name, print_vals = False):
-    with h5py.File(file_name, 'r') as f:
-        if(print_vals):
-            print("File Attributes:")
-            for key, val in f.attrs.items():
-                print(f"    {key} = {val}")
-            # Print all datasets and attributes
-            print("\nDatasets and Attributes:")
-            f.visititems(print_attrs)
+# def openSweepFile(file_name, print_vals = False):
+#     with h5py.File(file_name, 'r') as f:
+#         if(print_vals):
+#             print("File Attributes:")
+#             for key, val in f.attrs.items():
+#                 print(f"    {key} = {val}")
+#             # Print all datasets and attributes
+#             print("\nDatasets and Attributes:")
+#             f.visititems(print_attrs)
             
-    return tx_lo_frequencies
+#     return tx_lo_frequencies
+def returnSidebandPhaseSingle(fn, holdOverride = None, skipWLs = None, startTime = 50e-3):
+    with h5py.File(fn, 'r') as saveFile:
+        fs = saveFile.attrs['sample_rate']
+        
+        PD1_LSB_ARRAY = []
+        PD1_USB_ARRAY = []
+        PD2_LSB_ARRAY = []
+        PD2_USB_ARRAY = []
+        
+        frequencies = []
+        
+        PM0 = saveFile['PM0'][:]
+        PM1 = saveFile['PM1'][:]
+        PM2 = saveFile['PM2'][:]
+        PM3 = saveFile['PM3'][:]
+        PM4 = saveFile['PM4'][:]
+        PM5 = saveFile['PM5'][:]
+        if holdOverride is not None:
+            hold_time = holdOverride
+            Ns = int(hold_time*fs)
+            PM0 = PM0[:Ns]
+            PM1 = PM1[:Ns]
+            PM2 = PM2[:Ns]
+            PM3 = PM3[:Ns]
+            PM4 = PM4[:Ns]
+            PM5 = PM5[:Ns]
+        Nstart = int(startTime*fs)
+        PM0 = PM0[Nstart:]
+        PM1 = PM1[Nstart:]
+        PM2 = PM2[Nstart:]
+        PM3 = PM3[Nstart:]
+        PM4 = PM4[Nstart:]
+        PM5 = PM5[Nstart:]
+        PD1_USB = PM5
+        PD1_LSB = PM4
+        PD2_USB = PM1
+        PD2_LSB = PM2
+        PD1_LSB_ARRAY.append(PD1_LSB)
+        PD1_USB_ARRAY.append(PD1_USB)
+        PD2_LSB_ARRAY.append(PD2_LSB)
+        PD2_USB_ARRAY.append(PD2_USB)
+            
+        
+        return PD1_LSB_ARRAY, PD1_USB_ARRAY, PD2_LSB_ARRAY, PD2_USB_ARRAY, fs, frequencies
 
 def returnSidebandPhase(fn, holdOverride = None, skipWLs = None, startTime = 50e-3):
     with h5py.File(fn, 'r') as saveFile:
@@ -97,8 +141,21 @@ def returnSidebandPhase(fn, holdOverride = None, skipWLs = None, startTime = 50e
         return PD1_LSB_ARRAY, PD1_USB_ARRAY, PD2_LSB_ARRAY, PD2_USB_ARRAY, fs, frequencies
             # if i == freqIdx:
             #     return PD1_LSB, PD1_USB, PD2_LSB, PD2_USB, fs, freq
-
-def SweepFileAnalysis(fn, zeroValue, filt = False, holdOverride = None, skipWLs = None, fc = 100, showPlots = True, neg = -1, startTime = 50e-3, timeStamp = False, carrier = False, resample = None):
+            
+def getMOKUData(fn):
+    with h5py.File(fn, 'r') as saveFile:
+        tx_lo_frequencies = saveFile['TX_LOs'][:]
+        dataGroup = saveFile[f'tx_lo_{tx_lo_frequencies[0]}']
+        try:
+            PSDCH1 = dataGroup[f'MOKU_PSD_0_CH1']
+            AOM1_POW = PSDCH1.attrs['AOM1_POW']
+            AOM2_POW = PSDCH1.attrs['AOM2_POW']
+            return AOM1_POW, AOM2_POW
+        except:
+            print("No MOKU PSD data")
+            return "Not Recorded", "Not Recorded"
+            
+def SweepFileAnalysis(fn, zeroValue, filt = False, holdOverride = None, skipWLs = None, fc = 100, showPlots = True, neg = -1, startTime = 50e-3, timeStamp = False, carrier = False):
     if(showPlots):
         fig, axs = plt.subplots()
         figPSD, axsPSD = PLOT.CreatePSDPlot()
@@ -117,12 +174,6 @@ def SweepFileAnalysis(fn, zeroValue, filt = False, holdOverride = None, skipWLs 
         fs = saveFile.attrs['sample_rate']
         hold_time = saveFile.attrs['hold_time']
         
-        if resample is not None:
-            print("This is broken at the moment. Need to fix")
-            fs_old = fs
-            fs = fs/resample
-            print(f"Resampled to {fs}Hz from {fs_old}Hz")
-        
         if(timeStamp):
             time_stamp = saveFile.attrs['time_stamp']
         for i, freq in enumerate(tx_lo_frequencies):
@@ -137,17 +188,7 @@ def SweepFileAnalysis(fn, zeroValue, filt = False, holdOverride = None, skipWLs 
             PM2 = dataGroup['PM2'][:]
             PM3 = dataGroup['PM3'][:]
             PM4 = dataGroup['PM4'][:]
-            PM5 = dataGroup['PM5'][:]
-            
-            if resample is not None:
-                # resample is power of 2
-                PM0 = signal.decimate(PM0, resample)
-                PM1 = signal.decimate(PM1, resample)
-                PM2 = signal.decimate(PM2, resample)
-                PM3 = signal.decimate(PM3, resample)
-                PM4 = signal.decimate(PM4, resample)
-                PM5 = signal.decimate(PM5, resample)
-                
+            PM5 = dataGroup['PM5'][:]    
             
             if holdOverride is not None:
                 hold_time = holdOverride
@@ -211,23 +252,21 @@ def SweepFileAnalysis(fn, zeroValue, filt = False, holdOverride = None, skipWLs 
                 carrierDistUSBs.append(carrierDist)
             
             distances.append(dist)
-            wls.append(wl) 
+            wls.append(0.5*wl) 
             averages.append(np.mean(dist))
             sigmas.append(np.std(dist))
             
-            if i == 0:
-            
-                try:
-                    PSDCH1 = dataGroup[f'MOKU_PSD_{i}_CH1']
-                    PSDCH2 = dataGroup[f'MOKU_PSD_{i}_CH2']
-                    # print all attributes
-                    for key, val in PSDCH1.attrs.items():
-                        print(f"    {key} = {val}")
-                    for key, val in PSDCH2.attrs.items():
-                        print(f"    {key} = {val}")
-                except:
-                    print("No MOKU PSD data")
-            
+            # if i == 0:
+            #     try:
+            #         PSDCH1 = dataGroup[f'MOKU_PSD_{i}_CH1']
+            #         PSDCH2 = dataGroup[f'MOKU_PSD_{i}_CH2']
+            #         # print all attributes
+            #         for key, val in PSDCH1.attrs.items():
+            #             print(f"    {key} = {val}")
+            #         for key, val in PSDCH2.attrs.items():
+            #             print(f"    {key} = {val}")
+            #     except:
+            #         print("No MOKU PSD data")
             
             if(showPlots):
                 axs.plot(t, dist, label = f"TX_LO: {freq}, Wavelength: {wl*1000:.2f}mm")
@@ -251,8 +290,6 @@ def SweepFileAnalysis(fn, zeroValue, filt = False, holdOverride = None, skipWLs 
         figPSD, axsPSD = PLOT.formatPSDPlot(figPSD, axsPSD, linear= False)
     if(timeStamp):
         return distances, averages, sigmas, LO_frequencies, wls, fs, time_stamp
-    
-    
     
     if(carrier):
         return distances, averages, sigmas, LO_frequencies, wls, fs, carrierPhase, carrierDistUSBs, carrierDistLSBs
@@ -347,10 +384,10 @@ def openFile(file_name, print_vals = False, ts = 0.01, debias = False, filter = 
 
     return PD1, PD1_LSB, PD1_USB, PD2, PD2_LSB, PD2_USB, fs, fL, fM
 
-def synthetic_dist(PD1_USB, PD1_LSB, PD2_USB, PD2_LSB, FL, FM,  n = None, neg = -1, sidebandMult = 1):
+def synthetic_dist(PD1_USB, PD1_LSB, PD2_USB, PD2_LSB, FL, FM,  n = None, neg = -1, sidebandMult = 1, n_ref_index = 1):
     ''' Calculates synthetic wavelength distance. Adds number of wavelengths until it is within bound. '''
     c = 299792458
-    #c = c/n_ref_index
+    c = c/n_ref_index
 
     USB_SUM = PD1_USB + PD2_USB
     LSB_SUM = PD1_LSB + PD2_LSB
@@ -367,11 +404,9 @@ def synthetic_dist(PD1_USB, PD1_LSB, PD2_USB, PD2_LSB, FL, FM,  n = None, neg = 
 
     return SUM_DIFF, DISTANCE, WAVELENGTH
 
-def carrier_dist(SB1, SB2, wavelength):
+def carrier_dist(SB1, SB2, wavelength, n_ref_index = 1):
     ''' Calculates carrier distance from sidebands '''
-    c = 299792458
-    n_ref_index = 1
-    c = c/n_ref_index
+    wavelength = wavelength / n_ref_index
     PHASE = SB1 + SB2
     DISTANCE = PHASE*wavelength/2
     return PHASE, DISTANCE
@@ -510,6 +545,66 @@ def findSteps(t, data, numSteps, threshold = 800, holdTime = 1, offset = 0.05, d
             plt.axvspan(tRange[0], tRange[1], alpha=0.5, color='red')
         #plt.show()
     return tRanges
+
+def PLL_GAIN_DEC(AOM_POW, LINK_AOM_POW):
+    # Tuned with plutoRXGain giving RX gain. 1kHz BW at most, want to minimise data.
+    AOM_POWERS = [-10, -30, -50]
+    LINK_AOM_POWERS = [0, -20, -50]
+    
+    GAINS = np.array([
+    #AOM POW 0    -20     -50    
+            [1000, 1000,  1000], # LINK AOM POW 0
+            [1000, 1000,  100], # LINK AOM POW -20
+            [0, 0,  0] # LINK AOM POW -50
+    ])
+    DEC = np.array([
+    #AOM POW 0 -20 -50    
+            [11, 12,  13], # LINK AOM POW 0
+            [11, 12,  16], # LINK AOM POW -20
+            [0, 0,  0] # LINK AOM POW -50
+    ])
+    # return within range
+    if AOM_POW in AOM_POWERS and LINK_AOM_POW in LINK_AOM_POWERS:
+        idx1 = AOM_POWERS.index(AOM_POW)
+        idx2 = LINK_AOM_POWERS.index(LINK_AOM_POW)
+        return GAINS[idx1, idx2], DEC[idx1, idx2]
+    else:
+        # do not interpolate, pick nearest (above)
+        idx2 = np.where(np.array(AOM_POWERS) < AOM_POW)[0][0]
+        if(idx2 == 0):
+            return GAINS[0, 0], DEC[0, 0]
+        idx1 = idx2 - 1
+        return GAINS[idx1, 0], DEC[idx1, 0]
+    
+
+def plutoRXGain(AOM_POW, LINK_AOM_POW = -3):
+    ''' Made for V2. Takes AOM power from alternate side and returns gain of RX. For example AOM2 power is used to determine PD1 RX Gain. '''
+    AOM_POWERS = [0, -5, -10, -15, -20, -25, -30, -35, -40, -45, -50]
+    RX_GAINS =   [18, 23, 28,  32,  37,  42,  47,  52,  57,  62,  67]
+    
+    RX_GAINS = np.array(RX_GAINS) -3 - LINK_AOM_POW
+    
+    if AOM_POW in AOM_POWERS:
+        idx = AOM_POWERS.index(AOM_POW)
+        if RX_GAINS[idx] > 67:
+            return 67
+        return RX_GAINS[idx]
+    else:
+        # interpolate
+        idx2 = np.where(np.array(AOM_POWERS) < AOM_POW)[0][0]
+        if(idx2 == 0):
+            return RX_GAINS[0]
+        idx1 = idx2 - 1
+        a1 = AOM_POWERS[idx1]
+        a2 = AOM_POWERS[idx2]
+        g1 = RX_GAINS[idx1]
+        g2 = RX_GAINS[idx2]
+        gain = g1 + (g2 - g1)/(a2 - a1)*(AOM_POW - a1)
+        if gain > 67:
+            return 67
+        return int(gain)
+    
+    
 def plutoTXGain(LO, amp = "daisy_chain"):
     ''' Returns optimum gain of TX based on LO frequency. The gain of the TX is not flat over frequency. Depends on amplifiers. This is empirical. Looking at spectrum analyser. '''
     # 70MHz to 500MHz range
@@ -521,7 +616,14 @@ def plutoTXGain(LO, amp = "daisy_chain"):
             return -3
         else:
             return 0
-    
+    if (amp == "new"):
+        freqs = [300e6, 5500e6]
+        amps = [-6, 0]
+        if LO in freqs:
+            idx = np.where(np.array(freqs) == LO)[0][0]
+            return amps[idx]
+        else:
+            return 0
     if(amp == "daisy_chain"):
         # Two amplifiers in series
         
@@ -546,9 +648,13 @@ def plutoTXGain(LO, amp = "daisy_chain"):
             gain = a1 + (a2 - a1)/(f2 - f1)*(LO - f1)
             return gain
             
-def plutoTXSamples(FM, FL, fs, scale = 2**14, N = 128, modPhase = False, stdDev1 = 0.1, stdDev2 = 0.1):
+def plutoTXSamples(FM, FL, fs, scale = 2**14, N = 128, modPhase = False, ampScale = 0, ampFreq = 100):
     ''' Generate frequency offset for MSTAR modulation. Can also add things like phase modulation or noise in here eventually. '''
-    
+    if (FM == 0 or FL == 0):
+        samples = np.ones(N) * scale
+        samples2 = np.ones(N) * scale
+        return samples, samples2
+
     # calculate period of modulation
     T_FM = 1/FM
     # calculate number of samples per period
@@ -560,7 +666,10 @@ def plutoTXSamples(FM, FL, fs, scale = 2**14, N = 128, modPhase = False, stdDev1
     print(f"Number of samples: {Ns}")
     t = np.arange(Ns)/fs
     
-    scale = 2**14
+    # ampModulation = ampScale * np.sin(2*np.pi*ampFreq*t)
+    # print(len(ampModulation))
+    scale = 2**14 
+    
     samples = np.exp(2.0j*np.pi*FM*t) # Simulate a sinusoid of 100 kHz, so it should show up at 915.1 MHz at the receiver
     samples *= scale # The PlutoSDR expects samples to be between -2^14 and +2^14, not -1 and +1 like some SDRs
     samples2 = np.exp(2.0j*np.pi*FL*t) # Simulate a sinusoid of 100 kHz, so it should show up at 915.1 MHz at the receiver
@@ -574,18 +683,27 @@ def plutoTXSamples(FM, FL, fs, scale = 2**14, N = 128, modPhase = False, stdDev1
     
     return samples, samples2
 
-def getMOKUSpec(IP, AOM_POW_dBm, connect = False, show = True, hold = False, freqCenter = 105e6, freqSpan = 25e6, externalClk = True):
+def getMOKUSpec(IP, AOM_POW_dBm, AOM2_POW_dBm, connect = False, show = True, hold = False, freqCenter = 105e6, freqSpan = 25e6, externalClk = True, AOM1_freq = 34e6, AOM2_freq = 41e6, PD1_CENT = None, PD2_CENT = None):
     if(connect):
         SpecAmp = SpectrumAnalyzer(IP, force_connect=True)
         SpecAmp.set_external_clock(enable=externalClk) # Use external clock
         AOM1_POW = AOM_POW_dBm # dBm
-        AOM2_POW = AOM_POW_dBm # dBm
+        if AOM2_POW_dBm is None:
+            AOM2_POW = AOM_POW_dBm # dBm
+        else:
+            AOM2_POW = AOM2_POW_dBm
+        # if AOM1_POW > -3:
+        #     print("AOM1 Power too high")
+        #     AOM1_POW = -3
+        # if AOM2_POW > -3:
+        #     print("AOM2 Power too high")
+        #     AOM2_POW = -3
         AOM1_VOLTS, _, _ = OF.dBm2Volts(AOM1_POW)
         AOM2_VOLTS, _, _ = OF.dBm2Volts(AOM2_POW)
         print(f"AOM1 Voltage: {AOM1_VOLTS}, AOM2 Voltage: {AOM2_VOLTS}")
 
-        SpecAmp.sa_output(1, AOM1_VOLTS, 80e6)
-        SpecAmp.sa_output(2, AOM2_VOLTS, 75e6)
+        SpecAmp.sa_output(1, AOM1_VOLTS, AOM1_freq)
+        SpecAmp.sa_output(2, AOM2_VOLTS, AOM2_freq)
 
         # freq_center = 115e6
         # freq_span = 15e6
@@ -608,9 +726,36 @@ def getMOKUSpec(IP, AOM_POW_dBm, connect = False, show = True, hold = False, fre
             axs.plot(freqData, ch1Data, label = "Channel 1")
             axs.plot(freqData, ch2Data, label = "Channel 2")
             print(f"RBW: {RBW}")
+            if PD1_CENT is not None:
+                # draw dashed lines at PD1_CENT and PD2_CENT
+                axs.axvline(PD1_CENT, color = 'r', linestyle = '--', label = 'PD1 Center')
+            if PD2_CENT is not None:
+                axs.axvline(PD2_CENT, color = 'r', linestyle = '--', label = 'PD2 Center')
             fig, axs = PLOT.formatPSDPlotdBm(fig, axs, density=False, PSD_View=True, RBW=RBW)
         if(hold):
             plt.show()
         return freqData, ch1Data, ch2Data, RBW
     else:
         return None, None, None, None
+    
+def MOKU_SINEGEN(IP, AOM_POW_dBm, connect = False, externalClk = True):
+    if(connect):
+        SpecAmp = SpectrumAnalyzer(IP, force_connect=True)
+        SpecAmp.set_external_clock(enable=externalClk) # Use external clock
+        # if AOM_POW_dBm > -3:
+        #     print("AOM1 Power too high")
+        #     AOM_POW_dBm = -3
+        AOM1_VOLTS, _, _ = OF.dBm2Volts(AOM_POW_dBm)
+        print(f"AOM1 Voltage: {AOM1_VOLTS}")
+
+        SpecAmp.sa_output(1, AOM1_VOLTS, int(40e6))
+        SpecAmp.sa_output(2, AOM1_VOLTS, int(40e6))
+
+        # freq_center = 115e6
+        # freq_span = 15e6
+        SpecAmp.set_frontend(1, impedance='50Ohm', coupling='DC', range='1Vpp')
+        SpecAmp.set_frontend(2, impedance='50Ohm', coupling='DC', range='1Vpp')
+       
+        return 
+    else:
+        return 

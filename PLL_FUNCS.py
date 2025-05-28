@@ -44,6 +44,50 @@ def phaseToIQ(data, tVals, f0, A, additiveNoise=0, unit='cycles'):
     
     return IQ
 
+def libreGainTable(GAIN = 10000):
+    ''' Controller gain table for libre IQ PLLs. This has been tuned on Pluto 2 with slow_attack to get the ADC scale to be around -12dBFS/0.25x. For MSTAR it will reduce slightly if sidebands aren't balanced. '''
+    KP = 0
+    KI = 0
+    KII = 0
+    if(GAIN <= 1):
+        KP = -1
+        KI = -27
+        KII = -58
+        print("PLL BW 1Hz")
+    elif(GAIN <= 10):
+        KP = 2
+        KI = -21
+        KII = -48
+        print("PLL BW 10Hz")
+    elif(GAIN <= 100):
+        KP = 6
+        KI = -12
+        KII = -34
+        print("PLL BW 100Hz")
+        
+    elif(GAIN <= 500):
+        KP = 8
+        KI = -9
+        KII = -30
+        print("PLL BW 500Hz")
+    elif(GAIN <= 1000):
+        KP = 9
+        KI = -6
+        KII = -24
+        print("PLL BW 1kHz")
+    elif(GAIN <= 10000):
+        KP = 13
+        KI = -1
+        KII = -20
+        print("PLL BW 10kHz")
+    else:
+        KP = 15
+        KI = 6
+        KII = -5
+        print("PLL BW HIGH")
+    return KP, KI, KII
+
+
 def plutoGainTable(GAIN = 10000):
     ''' Controller gain table for pluto IQ PLLs. This has been tuned on Pluto 2 with slow_attack to get the ADC scale to be around -12dBFS/0.25x. For MSTAR it will reduce slightly if sidebands aren't balanced. '''
     KP = 0
@@ -87,7 +131,7 @@ def plutoGainTable(GAIN = 10000):
         print("PLL BW HIGH")
     return KP, KI, KII
 
-def PLL_FPGA_TF(A = 2**10, B = 2**11, P = 2**14, I = 2**2, I2 = 0, fs = 30.72e6, L = 12, f = None):
+def PLL_FPGA_TF(A = 2**10, B = 2**11, P = 2**14, I = 2**2, I2 = 0, fs = 30.72e6, L = 12, AB = 32, R = 32, f = None):
     if(f is None):
         f = np.linspace(0.00001, fs/2, 100000)
     z = np.exp(2j*np.pi*f/fs)
@@ -110,7 +154,7 @@ def PLL_FPGA_TF(A = 2**10, B = 2**11, P = 2**14, I = 2**2, I2 = 0, fs = 30.72e6,
     PI = D * (P_STAGE + I_STAGE+ II_STAGE)
     MIXER_GAIN = A * B * D * 2 ** -12 * D # Extra D is for the Q_sum register
     #L = 12
-    AB = 32
+    # AB = 32
     D = z**-1
 
     LUT_SCALE = 1 # or 2pi
@@ -152,6 +196,45 @@ def PLL_TF(A = 1, P = 0.2, I = 0.05, I2 = 0.005, fs = 1):
 
 
     return f, P_GAIN, I_GAIN, I2_GAIN, LOOP_GAIN, FORWARD_LOOP_TF, ERROR_TF
+
+@jit(nopython=True, cache=True)
+def PLL(dataIQ, P, I, I2):
+    ''' Function for Phase Locked Loop (PLL) for IQ data (in complex form, i.e. I+jQ) '''
+    N = len(dataIQ)
+    adjustment = np.zeros(N, dtype=np.complex64)
+    phase_error = np.zeros(N)
+    freq_error = np.zeros(N)
+    phase = 0
+    sum_error = 0
+    sum_sum_error = 0  
+    for i in range(N):
+        adjustment[i] = dataIQ[i] * np.exp(-1j*phase)
+        error = np.real(adjustment[i])
+        sum_error += error
+        sum_sum_error += sum_error
+        freq_error[i]  = P * error + I * sum_error + I2 * sum_sum_error
+        phase += 2*np.pi*freq_error[i]
+        phase_error[i] = phase/(2*np.pi)
+    return adjustment, phase_error
+
+def PLL_Q(dataIQ, P, I, I2):
+    ''' Function for Phase Locked Loop (PLL) for IQ data (in complex form, i.e. I+jQ) '''
+    N = len(dataIQ)
+    adjustment = np.zeros(N, dtype=np.complex64)
+    phase_error = np.zeros(N)
+    freq_error = np.zeros(N)
+    phase = 0
+    sum_error = 0
+    sum_sum_error = 0  
+    for i in range(N):
+        adjustment[i] = dataIQ[i] * np.exp(-1j*phase)
+        error = np.imag(adjustment[i])
+        sum_error += error
+        sum_sum_error += sum_error
+        freq_error[i]  = P * error + I * sum_error + I2 * sum_sum_error
+        phase += 2*np.pi*freq_error[i]
+        phase_error[i] = phase/(2*np.pi)
+    return adjustment, phase_error
 
 @jit(nopython=True, cache=True)
 def movingAverageFilter(data, N):
@@ -240,25 +323,7 @@ def FUNC_DELAY_COMPLEX(timeseries, time_delay, fs):
     delayed_timeseries = real_delay + 1j*imag_delay
     return delayed_timeseries
 
-@jit(nopython=True, cache=True)
-def PLL(dataIQ, P, I, I2):
-    ''' Function for Phase Locked Loop (PLL) for IQ data (in complex form, i.e. I+jQ) '''
-    N = len(dataIQ)
-    adjustment = np.zeros(N, dtype=np.complex64)
-    phase_error = np.zeros(N)
-    freq_error = np.zeros(N)
-    phase = 0
-    sum_error = 0
-    sum_sum_error = 0  
-    for i in range(N):
-        adjustment[i] = dataIQ[i] * np.exp(-1j*phase)
-        error = np.real(adjustment[i])
-        sum_error += error
-        sum_sum_error += sum_error
-        freq_error[i]  = P * error + I * sum_error + I2 * sum_sum_error
-        phase += 2*np.pi*freq_error[i]
-        phase_error[i] = phase/(2*np.pi)
-    return adjustment, phase_error
+
 
 @jit(nopython=True, cache=True)
 def PLL_WL(dataIQ, addData, P, I, I2):
@@ -293,6 +358,16 @@ def fftnoise(f):
     f[-1:-1-Np:-1] = np.conj(f[1:Np+1])
     return np.fft.ifft(f).real
 
+def complex_fftnoise(f):
+    ''' Function to generate noise with a given frequency spectrum. '''
+    f = np.array(f, dtype='complex')
+    Np = (len(f) - 1) // 2
+    phases = np.random.rand(Np) * 2 * np.pi
+    phases = np.cos(phases) + 1j * np.sin(phases)
+    f[1:Np+1] *= phases
+    f[-1:-1-Np:-1] = f[1:Np+1]
+    return np.fft.ifft(f) * 2
+
 def get_single_freqs(samples, fs):
     ''' Function to get the single sided frequency array. Does not include 0 Hz.'''
     return np.fft.fftfreq(samples, 1/fs)[1:samples//2]
@@ -314,7 +389,7 @@ def band_limit_freqs(fs, psd, cut_off, debug = False):
     adjusted_psd = psd * np.abs(h)**2
     return adjusted_psd
     
-def psdnoise(psd, samples, fs = 1):
+def psdnoise(psd, samples, fs = 1, complex = False):
     ''' Function to generate noise with a given single sided power spectral density. See get_single_freqs for freqs.'''
     # psd = (1/(fs*N))*abs(fft)**2
     single_fft = np.sqrt(fs*samples/2 * psd) # single sided fft
@@ -326,7 +401,10 @@ def psdnoise(psd, samples, fs = 1):
     #double_fft[0] = 0
     double_fft[samples//2] = 0
     # divide double_fft by 2 as it is not a single sided fft
-    return fftnoise(double_fft)
+    if complex:
+        return complex_fftnoise(double_fft)
+    else:
+        return fftnoise(double_fft)
 
 def white_psd_noise(level, samples, fs = 1):
     ''' Function to generate white noise with a given power spectral density. '''
