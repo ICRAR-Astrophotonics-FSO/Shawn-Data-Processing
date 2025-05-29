@@ -131,7 +131,7 @@ def plutoGainTable(GAIN = 10000):
         print("PLL BW HIGH")
     return KP, KI, KII
 
-def PLL_FPGA_TF(A = 2**10, B = 2**11, P = 2**14, I = 2**2, I2 = 0, fs = 30.72e6, L = 12, AB = 32, R = 32, f = None):
+def PLL_FPGA_TF(A = 2**10, B = 2**14, P = 2**14, I = 2**2, I2 = 0, fs = 30.72e6, L = 12, AB = 32, R = 32, f = None):
     if(f is None):
         f = np.linspace(0.00001, fs/2, 100000)
     z = np.exp(2j*np.pi*f/fs)
@@ -152,7 +152,7 @@ def PLL_FPGA_TF(A = 2**10, B = 2**11, P = 2**14, I = 2**2, I2 = 0, fs = 30.72e6,
     I_STAGE = D * (1 / (1-D)) * D  * I * D
     II_STAGE = D * (1 / (1-D)) * D * (1 / (1-D)) * D * I2 * D
     PI = D * (P_STAGE + I_STAGE+ II_STAGE)
-    MIXER_GAIN = A * B * D * 2 ** -12 * D # Extra D is for the Q_sum register
+    MIXER_GAIN = A * B * D * 2 ** -14 * D # Extra D is for the Q_sum register
     #L = 12
     # AB = 32
     D = z**-1
@@ -440,6 +440,43 @@ def IQData_AdditiveNoise(PhaseSig, PhaseNoisePSD, AdditiveNoisePSD, A, f0, N, fs
 
 
     return tsim, IQData, AdditiveNoise, PhaseNoise
+
+def progressive_welchPSD(freqBins, data, Fs):
+    """_summary_
+
+    This function calculates the Welch PSD of a signal for different nperseg values, 
+    which are calculated from the frequency bins provided. Fbin = Fs / nperseg.
+    Fbin will be used to give the max frequency for each PSD calculation. This is so that both 
+    the high and low frequency components of the signal can be captured in the PSD.
+
+    Args:
+        freqBins (_type_): _description_
+        data (_type_): _description_
+        Fs (_type_): _description_
+    """
+    freqBins = np.array(freqBins, dtype=float)  # Ensure freqBins is a numpy array
+    npersegs = np.round(Fs / freqBins).astype(int)
+    freqStitched = []
+    PSDStitched = []
+    for i, nperseg in enumerate(npersegs):
+        # print(f"Calculating PSD for nperseg={nperseg} with frequency bin {freqBins[i]} Hz")
+        f, Pxx = signal.welch(data, fs=Fs, nperseg=nperseg)
+        if i+1 >= len(freqBins):
+            fMax = Fs / 2
+        else:
+            fMax = freqBins[i+1]
+        idxs = np.where(f <= fMax)
+        # print(f"Frequency bin {freqBins[i]} Hz has {len(idxs[0])} points in the PSD.")
+
+        f = f[idxs]
+        f = f[1:]
+        Pxx = Pxx[idxs]
+        Pxx = Pxx[1:]
+
+        PSDStitched.append(Pxx)
+        freqStitched.append(f)
+
+    return np.concatenate(freqStitched), np.concatenate(PSDStitched)
 
 # Code to run if main
 if __name__ == '__main__':
