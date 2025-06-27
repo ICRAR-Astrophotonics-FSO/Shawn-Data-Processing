@@ -96,7 +96,7 @@ def hide_except_labels(legend, labels_to_keep, axs, fig):
     
     fig.canvas.draw()
 
-def formatMDEVPlot(fig, axs, title = 'Modified Allan Deviation', xlabel = 'Tau (s)', ylabel = 'MDEV (m)', paper = False, laserAmbiguity = False, laserAmbiguityWl = 1.5e-6/4, hideAll = False):
+def formatMDEVPlot(fig, axs, title = 'Modified Allan Deviation', xlabel = 'Tau (s)', ylabel = 'MDEV (m)', paper = False, laserAmbiguity = False, laserAmbiguityWl = 1.5e-6/4, hideAll = False, lloc = 'upper left'):
     ''' Format a MDEV plot.'''
     if not paper:
         axs.set_title(title)
@@ -106,9 +106,9 @@ def formatMDEVPlot(fig, axs, title = 'Modified Allan Deviation', xlabel = 'Tau (
     axs.set_yscale('log')
     
     if laserAmbiguity:
-        axs.axhline(y=laserAmbiguityWl, color='r', linestyle='--', label = 'Laser Ambiguity Wavelength $\lambda/4$')
+        axs.axhline(y=laserAmbiguityWl, color='r', linestyle='--', label=f"$\lambda/4=388\,$nm")
     
-    legend = axs.legend(loc = 'upper right')
+    legend = axs.legend(loc = lloc)
     axs.grid(which = 'both')
     axs.minorticks_on()
     if not paper:
@@ -119,11 +119,7 @@ def formatMDEVPlot(fig, axs, title = 'Modified Allan Deviation', xlabel = 'Tau (
             sel.annotation.get_bbox_patch().set(fc="white", alpha=0.8)
         cursor.connect("add", on_add)
         connect_legend(legend, axs, fig)
-    else:
-        axs.tick_params(axis='both', which='major', labelsize=12)
-        # get axis label
-        axs.xaxis.get_offset_text().set_fontsize(12) # set axis label font
-        # set axis label font
+
     fig.tight_layout()
     if hideAll:
         for line in axs.get_lines():
