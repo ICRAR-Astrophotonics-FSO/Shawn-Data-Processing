@@ -11,10 +11,10 @@ import mplcursors
 
 ### PSD, most used.
 
-SMALL_SIZE = 14
-MEDIUM_SIZE = 14
-BIGGER_SIZE = 14
-TITLE_PAD = 14
+SMALL_SIZE = 18
+MEDIUM_SIZE = 18
+BIGGER_SIZE = 18
+TITLE_PAD = 18
 
 plt.rc('font', size=SMALL_SIZE)  # controls default text sizes
 plt.rc('axes', titlesize=BIGGER_SIZE)  # fontsize of the axes title
@@ -96,7 +96,9 @@ def hide_except_labels(legend, labels_to_keep, axs, fig):
     
     fig.canvas.draw()
 
-def formatMDEVPlot(fig, axs, title = 'Modified Allan Deviation', xlabel = 'Tau (s)', ylabel = 'MDEV (m)', paper = False, laserAmbiguity = False, laserAmbiguityWl = 1.5e-6/4, hideAll = False, lloc = 'upper left'):
+def formatMDEVPlot(fig, axs, title = 'Modified Allan Deviation', xlabel = 'Tau (s)', ylabel = 'MDEV (m)', paper = False, laserAmbiguity = False,\
+                    timeAxis = False, timeScale = 1, timeAxisLabel = 'Delay (s)', time_labels = None,\
+                          laserAmbiguityWl = 1.5e-6/4, hideAll = False, lloc = 'upper left'):
     ''' Format a MDEV plot.'''
     if not paper:
         axs.set_title(title)
@@ -109,8 +111,39 @@ def formatMDEVPlot(fig, axs, title = 'Modified Allan Deviation', xlabel = 'Tau (
         axs.axhline(y=laserAmbiguityWl, color='r', linestyle='--', label=f"$\lambda/4=388\,$nm")
     
     legend = axs.legend(loc = lloc)
-    axs.grid(which = 'both')
-    axs.minorticks_on()
+    legend.get_frame().set_linewidth(1.25)
+    legend.get_frame().set_edgecolor('black')   
+    axs.spines['top'].set_linewidth(1)
+    axs.spines['right'].set_linewidth(1)
+    axs.spines['left'].set_linewidth(1)
+    axs.spines['bottom'].set_linewidth(1)
+    fig.tight_layout()
+    if timeAxis:
+        # Add a second y-axis for delay. Divide y-axis vals by speed of light.
+        c = 299792458.0  # Speed of light in m/s
+        # ax2 = axs.twinx()
+        # ax2.set_ylabel(timeAxisLabel)
+        # ax2.set_yscale('log')
+        # ax2.set_ylim(axs.get_ylim()[0] * timeScale / c, axs.get_ylim()[1] * timeScale / c)
+        c = 299792458.0  # m/s
+        def dist_to_time(d): return d / c * timeScale
+        def time_to_dist(t): return t * c / timeScale
+
+        ax2 = axs.secondary_yaxis('right', functions=(dist_to_time, time_to_dist))
+        ax2.set_ylabel(timeAxisLabel)
+        ax2.set_yscale('log')
+        if time_labels is not None:
+            ax2.yaxis.set_major_locator(plt.NullLocator())  # clear old locator
+            ax2.yaxis.set_minor_locator(plt.NullLocator())
+            ax2.set_yticks(time_labels)
+            ax2.get_yaxis().set_major_formatter(plt.ScalarFormatter())
+    if timeAxis:
+        axs.minorticks_on()
+        axs.grid(which='both')
+    else:
+        axs.grid(which='major', axis='both')
+        axs.grid(which='minor', axis='both')
+        axs.minorticks_on()
     if not paper:
         cursor = mplcursors.cursor(axs, hover=True)
         def on_add(sel):
@@ -119,8 +152,9 @@ def formatMDEVPlot(fig, axs, title = 'Modified Allan Deviation', xlabel = 'Tau (
             sel.annotation.get_bbox_patch().set(fc="white", alpha=0.8)
         cursor.connect("add", on_add)
         connect_legend(legend, axs, fig)
+    fig.tight_layout()  # Adjust layout to prevent overlap
+    # give legend and axes thick border
 
-    fig.tight_layout()
     if hideAll:
         for line in axs.get_lines():
             line.set_visible(False)
@@ -197,14 +231,16 @@ def formatPlot(fig, axs, title = 'Plot', xlabel = 'X', ylabel = 'Y'):
     connect_legend(legend, axs, fig)
     return fig, axs
 
-def formatPSDPlot(fig, axs, title = 'Power Spectral Density', unit = 'cyc', phase = True, dB = False, density = True, linear = True, hideAll = False):
+def formatPSDPlot(fig, axs, title = 'Power Spectral Density', ylabel = True, unit = 'cyc', phase = True, dB = False, density = True, linear = True, hideAll = False):
     ''' Format a PSD plot. If phase, cyc or rad^2/Hz and dB is used. If not, A^2/Hz or V^2/Hz and dBm is used for 50 ohm.'''
-    axs.set_title(title)
+    if title not in [None, '']:
+        axs.set_title(title)
     axs.set_xlabel('Frequency (Hz)')
-    if density:
-        axs.set_ylabel(f'Power Density ({unit}^2/Hz)')
-    else:
-        axs.set_ylabel(f'Power ({unit}^2)')
+    if ylabel:
+        if density:
+            axs.set_ylabel(f'Phase PSD ({unit}$^2$/Hz)')
+        else:
+            axs.set_ylabel(f'Power ({unit}$^2$)')
     if not linear:
         axs.set_xscale('log')
     axs.set_yscale('log')
@@ -257,19 +293,19 @@ def plotPII2(P, I, I2, freqs):
     ax0.grid()
     ax1.plot(freqs, np.angle(P))
     ax1.plot(freqs, np.angle(I))
-    ax1.plot(freqs, np.angle(I))
+    ax1.plot(freqs, np.angle(I2))
     ax1.set_title('LOOP GAIN Phase Response')
 
-def plotLoopGain(LOOP_GAIN, freqs):
+def plotLoopGain(LOOP_GAIN, freqs, title = 'Loop Gain'):
     fig, (ax0, ax1) = plt.subplots(nrows=2, sharex=True, figsize=(10, 6))
     ax0.plot(freqs, 20*np.log10(np.abs(LOOP_GAIN)))
-    ax0.set_title('LOOP GAIN Magnitude Response')
+    ax0.set_title(f'{title} - Magnitude Response')
     ax0.set_xscale('log')
     ax0.set_yscale('linear')
     ax0.set_ylabel('Magnitude (dB)')
     scale = 360/(2*np.pi)
     ax1.plot(freqs, np.angle(LOOP_GAIN)*scale)
-    ax1.set_title('LOOP GAIN Phase Response')
+    ax1.set_title(f'{title} - Phase Response')
     ax1.set_xscale('log')
     ax1.set_yscale('linear')
     ax1.set_xlabel('Frequency (Hz)')
@@ -281,21 +317,24 @@ def plotLoopGain(LOOP_GAIN, freqs):
     ax1.axvline(unity_gain_freq, color='r', linestyle='--')
     ax1.axhline(phase_margin*scale, color='r', linestyle='--')
     ax1.axhline(- np.pi*scale, color='r', linestyle='--')
+    ax0.set_xlim([1, freqs[-1]])
     print('Unity Gain Frequency: ', unity_gain_freq)
     print('Phase Margin: ', 180 + phase_margin*180/np.pi)
 
-def plotTF(TF, freqs):
+def plotTF(TF, freqs, title='Transfer Function'):
     fig, (ax0, ax1) = plt.subplots(nrows=2, sharex=True, figsize=(10, 6))
     ax0.plot(freqs, 20*np.log10(np.abs(TF)))
-    ax0.set_title('Magnitude Response')
+    ax0.set_title(f'{title} - Magnitude Response')
     ax0.set_xscale('log')
     ax0.set_yscale('linear')
     ax0.set_ylabel('Magnitude (dB)')
-    ax1.plot(freqs, np.angle(TF))
-    ax1.set_title('Phase Response')
+    phase_deg = ((np.angle(TF, deg=True) + 360) % 360) - 360
+    ax1.plot(freqs, phase_deg)
+    ax1.set_title(f'{title} - Phase Response')
     ax1.set_xscale('log')
     ax1.set_yscale('linear')
     ax1.set_xlabel('Frequency (Hz)')
+    ax0.set_xlim([1, freqs[-1]])
     ax0.grid()
     ax1.grid()
     

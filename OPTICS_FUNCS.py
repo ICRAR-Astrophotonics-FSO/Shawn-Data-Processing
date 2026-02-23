@@ -16,7 +16,7 @@ Wavelength = 1550e-9
 
 def CalcAdditiveShotPSD(Psig, Wavelength, eta = 1, RPD = None, unit = 'rad'):
     ''' Calculate the additive shot noise phase PSD in cyc^2/Hz or rad^2/Hz (default). Uses either hbar*c/(2pi*eta*lambda*Psig) or qe/(2pi*RPD*Psig).'''
-    hbar = 6.62607015e-34
+    hbar = 6.62607015e-34 / 2 / np.pi
     c = 299792458
     qe = 1.60217663e-19
     scale = 1
@@ -91,13 +91,15 @@ def PD_Calibration(freq, PSD, LO_POW, PSD_PREV = None, LO_POW_PREV = None):
 
 if __name__ == '__main__':
     # Test the heterodyne beat
-    SIG_POW = -100
+    SIG_POW = -20 - 11 - 10 # losses inside
     wavelength = 1542e-9
     RPD = 0.95
     Psig = optdBm2Watts(SIG_POW)
-    Psig = 1e-14
-    additiveLevel = CalcAdditiveShotPSD(Psig, wavelength, RPD = RPD)
-    print(f'Additive Shot Noise PSD: {additiveLevel} rad^2/Hz')
+    # Psig = 1e-14
+    additiveLevel = CalcAdditiveShotPSD(Psig, wavelength, RPD = None, unit='cyc')
+    additiveLevel *= 4 
+    print(f'Psig {Psig*1e6}uW Additive Shot Noise PSD: {additiveLevel} cyc^2/Hz')
+    # exit()
 
     LO_POW = -16.8
     Plo = optdBm2Watts(LO_POW)
@@ -131,8 +133,9 @@ if __name__ == '__main__':
     pow, gain = EOM_LINE_POWER(N, Vpi, Vpeak)
     print(f'Power: {pow}, Gain: {gain}')
 
-    # volts_dBm =  # dBm
-    # Vpp, Vrms, Vpeak = dBm2Volts(volts_dBm)
+    volts_dBm = 15 # dBm
+    Vpp_exp, Vrms_exp, Vpeak_exp = dBm2Volts(volts_dBm)
+    print(f'Vpp: {Vpp}, Vrms: {Vrms}, Vpeak: {Vpeak}')
     Vpeak = np.linspace(0, 10, 100)
     # Vpp, Vrms, Vpeak = dBm2Volts(Vpeak)
     line0_pow, line0_gain = EOM_LINE_POWER(0, Vpi, Vpeak)
@@ -144,11 +147,14 @@ if __name__ == '__main__':
     line12_pow, line12_gain = EOM_LINE_POWER(3, Vpi, Vpeak)
 
     plt.figure()
-    plt.plot(Vpeak, 10*np.log10(line0_pow), label = 'N = 0')
-    plt.plot(Vpeak, 10*np.log10(line1_pow), label = 'N = 1')
+    plt.plot(Vpeak, (line0_pow), label = 'N = 0')
+    plt.plot(Vpeak, (line1_pow), label = 'N = 1')
     # plt.plot(Vpeak, line2_pow, label = 'N = -1')
-    plt.plot(Vpeak, 10*np.log10(line3_pow), label = 'N = 2')
-    plt.plot(Vpeak, 10*np.log10(line12_pow), label = 'N = 3')
+    plt.plot(Vpeak, (line3_pow), label = 'N = 2')
+    plt.plot(Vpeak, (line12_pow), label = 'N = 3')
+    plt.axvline(Vpi, color='k', linestyle='--', label = 'Vpi')
+    plt.axvline(Vpeak_exp, color='r', linestyle='--', label = 'Vpeak Exp')
+    plt.title('EOM Line Power vs Vpeak')
     # plt.plot(Vpeak, line4_pow, label = 'N = -2')
     plt.ylabel('Bessel Power')
     plt.xlabel('Vpeak')
@@ -161,17 +167,20 @@ if __name__ == '__main__':
     pow, gain = EOM_LINE_POWER(1, Vpi, V0)
     print(f'Power Fraction: {pow}, Gain: {gain}') 
     RPD = 0.95
-    Psig1 = -35.3 + 2*gain - 3 # dBm
-    Psig2 = -40.1 + 2*gain - 3 # dBm. -3 for 50/50 splitter
+    Psig1 = -21 - 11 # dBm
+    Psig2 = -16 - 11 # dBm. -3 for 50/50 splitter
     Psig1 = optdBm2Watts(Psig1)
     Psig2 = optdBm2Watts(Psig2)
 
     additiveLevel1 = CalcAdditiveShotPSD(Psig1, Wavelength, RPD = RPD)
     additiveLevel2 = CalcAdditiveShotPSD(Psig2, Wavelength, RPD = RPD)
+    additiveLevel1 /= (2 * np.pi) ** 2
+    additiveLevel2 /= (2 * np.pi) ** 2
+    print(f'Additive Shot Noise PSD1: {additiveLevel1} cyc^2/Hz')
+    print(f'Additive Shot Noise PSD2: {additiveLevel2} cyc^2/Hz')
 
-    print(f'Additive Shot Noise PSD1: {additiveLevel1} rad^2/Hz')
-    print(f'Additive Shot Noise PSD2: {additiveLevel2} rad^2/Hz')
-
+    total = additiveLevel1 * 2 + additiveLevel2 * 2
+    print(f'Total Additive Shot Noise PSD: {total} cyc^2/Hz')
 
     plt.show()
     

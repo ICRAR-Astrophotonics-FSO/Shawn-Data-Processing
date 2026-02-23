@@ -138,7 +138,6 @@ def PLL_FPGA_TF(A = 2**10, B = 2**14, P = 2**14, I = 2**2, I2 = 0, fs = 30.72e6,
     den = 1 - z**-1
 
     N = 2
-    R = 32
     T = int(N*np.log2(R))
 
     integrator_stages = (z**-1)/den
